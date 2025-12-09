@@ -15,19 +15,23 @@ namespace ModelViewer.src
         Game game;
         public string Name { get; private set; }
         public PartData[] PartsData;
-        
+        int selectedPartIndex = 0;
         public Vector3 Position { get; set; } = Vector3.Zero;
         public Quaternion Orientation { get; set; } = Quaternion.Identity;
         public Vector3 Scale { get; set; } = new Vector3(0.01f);
 
         public Matrix4x4 World => Matrix4x4.CreateScale(Scale) * Matrix4x4.CreateFromQuaternion(Orientation) * Matrix4x4.CreateTranslation(Position);
 
-        public ModelData(Game game, string path) 
+        private bool _useParentTransform = true;
+        public bool UseParentTransform { get => _useParentTransform; set => _useParentTransform = value; }
+        public ModelData(Game game, string path, int flags) 
         {
             this.game = game;
             model = new Model(game.GL, path,
-                meshAttributes: MeshAttributes.Position3D | MeshAttributes.TexCoord | 
-                MeshAttributes.Normals | MeshAttributes.Tangents | MeshAttributes.Bitangents);
+                postProcessSteps: (PostProcessSteps)flags,
+                meshAttributes: MeshAttributes.Position3D | MeshAttributes.TexCoord |
+                MeshAttributes.Normals | MeshAttributes.Tangents | MeshAttributes.Bitangents,
+                saveVerticesIndices: true);
             
             var parts = new List<PartData>();
             foreach(var part in model.Parts)
@@ -48,7 +52,8 @@ namespace ModelViewer.src
             s.KD.Set(.8f);
             s.KS.Set(.6f);
             s.uShininess.Set(10);
-
+            s.uLightEnabled.Set(1);
+            
             for (int p = 0; p < model.Parts.Count; p++)
             {
                 var part = model.Parts[p];
@@ -61,14 +66,17 @@ namespace ModelViewer.src
 
                     s.uColor.Set(meshData.Color);
 
-                    if(partData.UseParentTransform)
-                    {
-                        s.uWorld.Set(mesh.Transform * World);
-                    }
+                    Matrix4x4 w;
+                    Matrix4x4 itw;
+
+                    if (meshData.UseParentTransform)
+                        w = mesh.Transform * World;
                     else
-                    {
-                        s.uWorld.Set(meshData.World);
-                    }
+                        w = meshData.World;
+                    //w = mesh.Transform * World;
+
+                    s.uWorld.Set(w);
+                    
                     s.uUseTexture.Set(meshData.UseTexture);
 
                     if(meshData.UseTexture == 1)
@@ -83,15 +91,73 @@ namespace ModelViewer.src
             
         }
 
+        //public void DrawMask()
+        //{
+        //    var s = game.ModelShader;
+        //    s.SetAsCurrent();
+        //    s.uLightEnabled.Set(0);
+        //    s.uUseTexture.Set(0);
+        //    s.uColor.Set(Vector3.One);
+        //    var part = model.Parts[selectedPartIndex];
+        //    var i = PartsData[selectedPartIndex].SelectedMeshIndex;
+        //    var mesh = part.Meshes[i];
+        //    s.uWorld.Set(mesh.Transform * World);
+        //    mesh.Draw();
+        //}
+
         int[] selectedMesh;
-        public void DrawImGui()
+        bool _uniformScale = true;
+        //float yaw = 0;
+        //float pitch = 0;
+        //float roll = 0;
+
+        public void DrawEditor()
         {
-            
-            if(ImGui.CollapsingHeader($"Model {Name}"))
+
+            if (ImGui.CollapsingHeader($"Model {Name}"))
             {
+                ImGui.Checkbox("Uniform Scale", ref _uniformScale);
 
+                float scale = Scale.X;
+                if(_uniformScale)
+                {
+                    ImGui.DragFloat($"Scale", ref scale, 0.01f);
+
+                    Scale = new Vector3(scale);
+                }
+
+                Vector3 pos = Position;
+                if (ImGui.DragFloat3($"Position", ref pos, 0.01f))
+                {
+                    Position = pos;
+                }
+                if(ImGui.Button("Re-center"))
+                {
+                    Position = Vector3.Zero;
+                }
+                Orientation.ExtractYawPitchRoll(out var yaw, out var pitch, out var roll);
+                var euler = new Vector3(yaw.ToDeg(), pitch.ToDeg(), roll.ToDeg());
+
+                if (ImGui.DragFloat3($"Yaw Pitch Roll", ref euler))
+                {
+                    yaw = euler.X.ToRad();
+                    pitch = euler.Y.ToRad();
+                    roll = euler.Z.ToRad();
+                    Orientation = Quaternion.CreateFromYawPitchRoll(-yaw,pitch,roll);
+                }
+
+
+
+                if (ImGui.Checkbox("Apply parent transforms", ref _useParentTransform))
+                {
+                    if(_useParentTransform)
+                    {
+                        foreach (var pd in PartsData)
+                            foreach (var md in pd.MeshData)
+                                md.UseParentTransform = true;
+                    }
+                }
             }
-
             for (int p = 0; p < model.Parts.Count; p++)
             {
                 var part = model.Parts[p];
@@ -104,6 +170,16 @@ namespace ModelViewer.src
         {
             if (ImGui.CollapsingHeader($"Part {p}: {part.Name}"))
             {
+                if (ImGui.Checkbox("Apply parent transform", ref partData.UseParentTransform))
+                {
+                    if (partData.UseParentTransform)
+                    {
+                        foreach (var md in partData.MeshData)
+                            md.UseParentTransform = true;
+                    }
+                }
+
+
                 var meshCount = part.Meshes.Count;
                 var meshNames = new string[meshCount];
 
@@ -121,13 +197,16 @@ namespace ModelViewer.src
 
             }
         }
+
+
         void DrawMeshUI(int p, int m, PartData partData, MeshData meshData)
         {
 
             if (ImGui.TreeNode($"Mesh {m}"))
             {
+                ImGui.Checkbox($"Use Parent Transform##{p}_{m}", ref meshData.UseParentTransform);
 
-                if (!partData.UseParentTransform)
+                if (!meshData.UseParentTransform)
                 {
                     // Position
                     Vector3 pos = meshData.Position;
@@ -140,11 +219,11 @@ namespace ModelViewer.src
                     //// For simplicity: show euler angles (you'd convert to/from quaternion)
                     //var euler = meshData.Orientation.ToEulerAngles();  // pseudo-code
                     meshData.Orientation.ExtractYawPitchRoll(out var y, out var pitch, out var r);
-                    var euler = new Vector3(y, pitch, r);
-                    //Vector3 euler = Vector3.Zero;
-                    if (ImGui.DragFloat3($"Rot (Euler)##{p}_{m}", ref euler, 1.0f))
+                    var euler = new Vector3(y.ToDeg(), pitch.ToDeg(), r.ToDeg());
+                    
+                    if (ImGui.DragFloat3($"Rot (Euler)##{p}_{m}", ref euler))
                     {
-                        meshData.Orientation = Quaternion.CreateFromYawPitchRoll(euler.Y, euler.X, euler.Z);
+                        meshData.Orientation = Quaternion.CreateFromYawPitchRoll(euler.Y.ToRad(), euler.X.ToRad(), euler.Z.ToRad());
                     }
 
                     // Scale

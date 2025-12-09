@@ -1,4 +1,5 @@
-﻿using Phoenix.Rendering.Shaders;
+﻿using Phoenix.Rendering;
+using Phoenix.Rendering.Shaders;
 using Silk.NET.OpenGL;
 using System;
 using System.Collections.Generic;
@@ -11,7 +12,9 @@ namespace ModelViewer.src
     {
         private GLShader _shaderModel;
 
-        public ShaderUniform<Matrix4x4> uWorld { get; set; }
+        public ShaderUniform<Matrix4x4> uWorld { get;set; }
+        public ShaderUniform<Matrix4x4> uITW { get; set; }
+
         public ShaderUniform<Vector3> uColor { get; set; }
         public ShaderUniform<Vector3> uCameraPosition{ get; set; }
         public ShaderUniform<Vector3> uLightPosition{ get; set; }
@@ -22,14 +25,14 @@ namespace ModelViewer.src
         public ShaderUniform<float> uShininess{ get; set; }
         public ShaderUniform<int> uUseTexture{ get; set; }
         public ShaderTextureUniform uTex{ get; set; }
-        
-
+        public ShaderUniform<int> uLightEnabled { get; set; }
         public ModelShader(Game game)
         {
             _shaderModel = new GLShader(game.GL, Game.ContentFolderShaders + "model/model");
             _shaderModel.AttachUBO(game.CommonUboHandle, "CommonData");
 
             uWorld = new ShaderUniform<Matrix4x4>(_shaderModel, "uWorld");
+            uITW = new ShaderUniform<Matrix4x4>(_shaderModel, "uITW");
             uColor = new ShaderUniform<Vector3>(_shaderModel, "uColor");
             uCameraPosition = new ShaderUniform<Vector3>(_shaderModel, "uCameraPosition");
             uLightPosition = new ShaderUniform<Vector3>(_shaderModel, "uLightPosition");
@@ -39,6 +42,7 @@ namespace ModelViewer.src
             KS = new ShaderUniform<float>(_shaderModel, "KS");
             uShininess = new ShaderUniform<float>(_shaderModel, "uShininess");
             uUseTexture = new ShaderUniform<int>(_shaderModel, "uUseTexture");
+            uLightEnabled = new ShaderUniform<int>(_shaderModel, "uLightEnabled");
             uTex = new ShaderTextureUniform(_shaderModel, "uTex", 0);
         }
         public void SetAsCurrent()

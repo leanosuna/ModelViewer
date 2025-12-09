@@ -8,7 +8,7 @@ namespace ModelViewer.src
     public class PartData
     {
         public MeshData[] MeshData;
-        public int SelectedMeshIndex;
+        public int SelectedMeshIndex { get; set; }
         public bool UseParentTransform = true;
         
         public PartData(Game game, ModelPart part)

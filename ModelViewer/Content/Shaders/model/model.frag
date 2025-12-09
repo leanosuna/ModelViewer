@@ -1,8 +1,13 @@
 #version 410 core
 
 out vec4 oColor;
+
 uniform vec3 uColor;
 uniform int uUseTexture;
+uniform int uLightEnabled;
+
+uniform int uMask;
+uniform vec3 uMaskColor;
 
 uniform sampler2D uTex;
 
@@ -13,6 +18,14 @@ in VS_OUT
     vec3 position;
 } fs_in;
 
+layout(std140) uniform CommonData
+{
+    mat4 sView;
+    mat4 sProjection;
+    float sTime;
+    float sDeltaTime;
+};
+
 
 uniform vec3 uCameraPosition;
 uniform vec3 uLightPosition;
@@ -22,6 +35,7 @@ uniform float KA;
 uniform float KD;
 uniform float KS;
 uniform float uShininess;
+
 
 vec3 BlinnPhong(vec3 worldPos, vec3 normal)
 {
@@ -44,7 +58,10 @@ void main()
     else
         color = texture(uTex, fs_in.texCoords);  
    
-    color.rgb *= BlinnPhong(fs_in.position, fs_in.normal);
-
+    if(uLightEnabled == 1)
+    {        
+        color.rgb *= BlinnPhong(fs_in.position, fs_in.normal);
+    }   
+    
     oColor = color;
 }

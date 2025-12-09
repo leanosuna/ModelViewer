@@ -2,8 +2,8 @@
 layout (location = 0) in vec3 vPos;
 layout (location = 1) in vec2 vTexCoords;
 layout (location = 2) in vec3 vNormal;
-layout (location = 3) in vec2 vTangent;
-layout (location = 4) in vec3 vBitangent;
+//layout (location = 3) in vec2 vTangent;
+//layout (location = 4) in vec3 vBitangent;
 
 uniform mat4 uWorld;
 
@@ -34,7 +34,7 @@ void main()
     
     mat4 itw = transpose(inverse(uWorld));
     vec4 normal = itw * vec4(vNormal, 1);
-    vs_out.normal = normal.xyz;
-        
+    vs_out.normal = normalize(normal.xyz);
+    
     gl_Position = sProjection * sView  * world;
 }

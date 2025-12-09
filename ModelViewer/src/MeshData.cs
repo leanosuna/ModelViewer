@@ -16,6 +16,8 @@ namespace ModelViewer.src
 
         public int UseTexture { get; set; } = 0;
         public GLTexture Tex { get; set; }
+
+        public bool UseParentTransform = true;
         public MeshData(Game game, Mesh mesh)
         {
 
