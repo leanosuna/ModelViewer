@@ -10,8 +10,24 @@
   <ItemGroup>
     <PackageReference Include="NativeFileDialogNET" Version="2.0.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-    <PackageReference Include="Phoenix" Version="1.0.0" />
+    
+    <!--<PackageReference Include="Phoenix" Version="1.0.0" />
+    -->
+    <PackageReference Include="RiptideNetworking.Riptide" Version="2.2.1" />
+    <PackageReference Include="Silk.NET.Assimp" Version="2.22.0" />
+    <PackageReference Include="Silk.NET.Input" Version="2.22.0" />
+    <PackageReference Include="Silk.NET.OpenGL" Version="2.22.0" />
+    <PackageReference Include="Silk.NET.OpenGL.Extensions.ImGui" Version="2.22.0" />
+    <PackageReference Include="Silk.NET.Windowing" Version="2.22.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Phoenix">
+      <HintPath>..\..\Phoenix\Phoenix\bin\Debug\net10.0\Phoenix.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
   <ItemGroup>
     <Reference Include="irrKlang.NET4">
       <HintPath>dll\irrKlang\irrKlang.NET4.dll</HintPath>

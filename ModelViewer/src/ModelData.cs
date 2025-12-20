@@ -6,12 +6,13 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Text;
+using Mesh = Phoenix.Rendering.Geometry.Mesh;
 
 namespace ModelViewer.src
 {
     public class ModelData : IDisposable
     {
-        Model model;
+        public Model Model { get; private set; }
         Game game;
         public string Name { get; private set; }
         public PartData[] PartsData;
@@ -20,21 +21,29 @@ namespace ModelViewer.src
         public Quaternion Orientation { get; set; } = Quaternion.Identity;
         public Vector3 Scale { get; set; } = new Vector3(0.01f);
 
+
+
         public Matrix4x4 World => Matrix4x4.CreateScale(Scale) * Matrix4x4.CreateFromQuaternion(Orientation) * Matrix4x4.CreateTranslation(Position);
 
         private bool _useParentTransform = true;
         public bool UseParentTransform { get => _useParentTransform; set => _useParentTransform = value; }
+
+        bool _uniformScale = true;
+
+        Vector3 locateColor = Vector3.UnitY;
+
         public ModelData(Game game, string path, int flags) 
         {
             this.game = game;
-            model = new Model(game.GL, path,
+            Model = new Model(game.GL, path,
                 postProcessSteps: (PostProcessSteps)flags,
                 meshAttributes: MeshAttributes.Position3D | MeshAttributes.TexCoord |
                 MeshAttributes.Normals | MeshAttributes.Tangents | MeshAttributes.Bitangents,
-                saveVerticesIndices: true);
+                
+                extractTextures: true);
             
             var parts = new List<PartData>();
-            foreach(var part in model.Parts)
+            foreach(var part in Model.Parts)
             {
                 parts.Add(new PartData(game, part));
             }
@@ -42,9 +51,13 @@ namespace ModelViewer.src
 
             Name = path.Split("\\").Last();
         }
-
-        public void Draw()
+        
+        public void Draw(float t)
         {
+            locateColor.X = MathF.Sin(t) * 0.5f + 1;
+            locateColor.Y = MathF.Tan(t) * 0.5f + 1;
+            locateColor.Z = MathF.Cos(t) * 0.5f + 1;
+                
             var s = game.ModelShader;
             s.SetAsCurrent();
 
@@ -53,10 +66,11 @@ namespace ModelViewer.src
             s.KS.Set(.6f);
             s.uShininess.Set(10);
             s.uLightEnabled.Set(1);
+            var anyLocating = PartsData.Any(p => p.MeshData.Any(m => m.Locating));
             
-            for (int p = 0; p < model.Parts.Count; p++)
+            for (int p = 0; p < Model.Parts.Count; p++)
             {
-                var part = model.Parts[p];
+                var part = Model.Parts[p];
                 var partData = PartsData[p];
                 string name = part.Name;
                 for (int m = 0; m < part.Meshes.Count; m++)
@@ -65,6 +79,11 @@ namespace ModelViewer.src
                     var meshData = partData.MeshData[m];
 
                     s.uColor.Set(meshData.Color);
+                    if (anyLocating && !meshData.Locating)
+                        s.uColor.Set(meshData.Color * 0.1f);
+                    if (meshData.Locating)
+                        s.uColor.Set(locateColor);
+
 
                     Matrix4x4 w;
                     Matrix4x4 itw;
@@ -91,26 +110,9 @@ namespace ModelViewer.src
             
         }
 
-        //public void DrawMask()
-        //{
-        //    var s = game.ModelShader;
-        //    s.SetAsCurrent();
-        //    s.uLightEnabled.Set(0);
-        //    s.uUseTexture.Set(0);
-        //    s.uColor.Set(Vector3.One);
-        //    var part = model.Parts[selectedPartIndex];
-        //    var i = PartsData[selectedPartIndex].SelectedMeshIndex;
-        //    var mesh = part.Meshes[i];
-        //    s.uWorld.Set(mesh.Transform * World);
-        //    mesh.Draw();
-        //}
+        
 
-        int[] selectedMesh;
-        bool _uniformScale = true;
-        //float yaw = 0;
-        //float pitch = 0;
-        //float roll = 0;
-
+        
         public void DrawEditor()
         {
 
@@ -121,13 +123,21 @@ namespace ModelViewer.src
                 float scale = Scale.X;
                 if(_uniformScale)
                 {
-                    ImGui.DragFloat($"Scale", ref scale, 0.01f);
+                    ImGui.DragFloat($"Scale", ref scale, 0.001f);
 
                     Scale = new Vector3(scale);
                 }
+                else
+                {
+                    var f3Scale = Scale;
+                    if (ImGui.DragFloat3($"Scale", ref f3Scale, 0.001f))
+                    {
+                        Scale = f3Scale;
+                    }
+                }
 
                 Vector3 pos = Position;
-                if (ImGui.DragFloat3($"Position", ref pos, 0.01f))
+                if (ImGui.DragFloat3($"Position", ref pos, 0.001f))
                 {
                     Position = pos;
                 }
@@ -158,9 +168,9 @@ namespace ModelViewer.src
                     }
                 }
             }
-            for (int p = 0; p < model.Parts.Count; p++)
+            for (int p = 0; p < Model.Parts.Count; p++)
             {
-                var part = model.Parts[p];
+                var part = Model.Parts[p];
                 var partData = PartsData[p];
 
                 DrawPartUI(p, part, partData);
@@ -170,16 +180,7 @@ namespace ModelViewer.src
         {
             if (ImGui.CollapsingHeader($"Part {p}: {part.Name}"))
             {
-                if (ImGui.Checkbox("Apply parent transform", ref partData.UseParentTransform))
-                {
-                    if (partData.UseParentTransform)
-                    {
-                        foreach (var md in partData.MeshData)
-                            md.UseParentTransform = true;
-                    }
-                }
-
-
+                
                 var meshCount = part.Meshes.Count;
                 var meshNames = new string[meshCount];
 
@@ -190,20 +191,24 @@ namespace ModelViewer.src
 
                 for (int m = 0; m < meshCount; m++)
                 {
+                    var mesh = part.Meshes[m];
                     var meshData = partData.MeshData[m];
 
-                    DrawMeshUI(p, m, partData, meshData);
+                    DrawMeshUI(p, m, partData, mesh, meshData);
                 }
 
             }
         }
 
 
-        void DrawMeshUI(int p, int m, PartData partData, MeshData meshData)
+        void DrawMeshUI(int p, int m, PartData partData, Mesh mesh, MeshData meshData)
         {
 
-            if (ImGui.TreeNode($"Mesh {m}"))
+            if (ImGui.TreeNode($"Mesh {m}: {mesh.Name} F {mesh.NumFaces} V {mesh.VerticesLength}"))
             {
+
+                ImGui.Checkbox($"Locate ##{p}_{m}", ref meshData.Locating);
+
                 ImGui.Checkbox($"Use Parent Transform##{p}_{m}", ref meshData.UseParentTransform);
 
                 if (!meshData.UseParentTransform)
@@ -218,12 +223,15 @@ namespace ModelViewer.src
                     //// Rotation (quaternion as euler or as individual components)
                     //// For simplicity: show euler angles (you'd convert to/from quaternion)
                     //var euler = meshData.Orientation.ToEulerAngles();  // pseudo-code
-                    meshData.Orientation.ExtractYawPitchRoll(out var y, out var pitch, out var r);
-                    var euler = new Vector3(y.ToDeg(), pitch.ToDeg(), r.ToDeg());
+                    meshData.Orientation.ExtractYawPitchRoll(out var yaw, out var pitch, out var roll);
+                    var euler = new Vector3(yaw.ToDeg(), pitch.ToDeg(), roll.ToDeg());
                     
                     if (ImGui.DragFloat3($"Rot (Euler)##{p}_{m}", ref euler))
                     {
-                        meshData.Orientation = Quaternion.CreateFromYawPitchRoll(euler.Y.ToRad(), euler.X.ToRad(), euler.Z.ToRad());
+                        yaw = euler.X.ToRad();
+                        pitch = euler.Y.ToRad();
+                        roll = euler.Z.ToRad();
+                        meshData.Orientation = Quaternion.CreateFromYawPitchRoll(-yaw,pitch, roll);
                     }
 
                     // Scale
@@ -246,7 +254,7 @@ namespace ModelViewer.src
                     if (meshData.Tex == null)
                         ImGui.Text("Texture not set");
                     else
-                        ImGui.Text($"Texture: {meshData.Tex.Path.Split("\\").Last()}");
+                        ImGui.Text($"Texture: {meshData.Tex.Name}");
 
                     ImGui.SameLine();
                     if (ImGui.Button("Select"))
@@ -296,7 +304,8 @@ namespace ModelViewer.src
                             size.Y = maxSize;
                         }
 
-                        if (ImGui.ImageButton(game.ToName(tex.Path), (nint)tex.GetHandle(), size))
+                        var name = tex.Name;
+                        if (ImGui.ImageButton(name, (nint)tex.GetHandle(), size))
                         {
                             meshData.Tex = tex;
                         }
@@ -343,7 +352,7 @@ namespace ModelViewer.src
         }
         public void Dispose()
         {
-            model.Dispose();
+            Model.Dispose();
         }
     }
 }

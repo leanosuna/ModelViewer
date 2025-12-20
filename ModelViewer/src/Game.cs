@@ -19,11 +19,11 @@ namespace ModelViewer.src
     public class Game : PhoenixGame
     {
         public const string ContentFolderShaders = "Content/Shaders/";
-       
+
         private FreeCamera _freeCamera;
         public ModelShader ModelShader { get; private set; }
         public PostShader QuadShader { get; private set; }
-        
+
         List<ModelData> _loadedModels = new List<ModelData>();
 
         bool _showEditor = true;
@@ -33,6 +33,18 @@ namespace ModelViewer.src
         float _statusTime;
         bool _showStatus = false;
         string _modelPath;
+        int _assimpFlags = (int)
+           (PostProcessSteps.Triangulate
+           | PostProcessSteps.GenerateSmoothNormals
+           | PostProcessSteps.GenerateUVCoords
+           | PostProcessSteps.JoinIdenticalVertices
+           | PostProcessSteps.SortByPrimitiveType
+           | PostProcessSteps.FlipUVs
+           | PostProcessSteps.ImproveCacheLocality
+           //| PostProcessSteps.OptimizeGraph
+           //| PostProcessSteps.OptimizeMeshes
+           );
+
         public string Status { get => _status;
             set {
                 _status = value;
@@ -40,15 +52,15 @@ namespace ModelViewer.src
                 _showStatus = true;
             }
 
-            
+
         }
-        public List<GLTexture> Textures { get;} = new List<GLTexture>();
+        public List<GLTexture> Textures { get; } = new List<GLTexture>();
         public Game()
         {
             Log.ClearLog();
             Log.Enabled = true;
         }
-        
+
         protected override void Initialize()
         {
             SetResolution(Window.Monitor.Bounds.Max.ToNum(), false);
@@ -58,10 +70,10 @@ namespace ModelViewer.src
             //Window.FramesPerSecond = 0;
             //Window.UpdatesPerSecond = 0;
             //Window.VSync = false;
-            
+
             _freeCamera = new FreeCamera(
                 this,
-                position: new Vector3(5,5,5),
+                position: new Vector3(5, 5, 5),
 
                 yaw: 4,
                 pitch: -0.5f,
@@ -78,6 +90,15 @@ namespace ModelViewer.src
 
             ModelShader = new ModelShader(this);
             QuadShader = new PostShader(this);
+
+
+            //var path = "Content/3D/Racer/Racer.fbx";
+            //_modelPath = path;
+            //var md = new ModelData(this, path, _assimpFlags);
+            //_loadedModels.Add(md);
+            //Status = $"Loaded model {md.Name}";
+
+            //Textures.AddRange(md.Model.Textures.Values);
         }
 
         protected override void Update(double deltaTime)
@@ -103,7 +124,7 @@ namespace ModelViewer.src
 
             if (InputManager.KeyDown(Key.ControlLeft) &&
                 InputManager.KeyDownOnce(Key.R))
-                    OpenModelFilePicker();
+                OpenModelFilePicker();
             if (InputManager.KeyDown(Key.ControlLeft) &&
                 InputManager.KeyDownOnce(Key.T))
                 OpenTextureFilePicker();
@@ -126,41 +147,26 @@ namespace ModelViewer.src
         {
             GUIManager.SetFontSize(15);
             GL.Enable(GLEnum.DepthTest);
-            GL.Disable(GLEnum.CullFace);
-            GL.CullFace(GLEnum.FrontAndBack);
+            GL.Enable(GLEnum.CullFace);
             GL.ClearColor(0, 0, 0, 0);
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-
+            
             foreach (var md in _loadedModels)
             {
-                md.Draw();
+                md.Draw((float)Time);
             }
 
             DrawEditor();
             DrawStatus((float)deltaTime);
-            
-            if(_showImGuiDemo)
+
+            if (_showImGuiDemo)
                 ImGui.ShowDemoWindow();
 
             GUIManager.DrawRAlignedText($"{(int)FPS_SAMPLE} fps", new Vector2(WindowWidth, 0), Vector4.One, 15);
             Gizmos.AddAxisLines(1000);
         }
-        //int flags = (int)
-        //    (PostProcessSteps.JoinIdenticalVertices | PostProcessSteps.Triangulate | 
-        //    PostProcessSteps.LimitBoneWeights | PostProcessSteps.ImproveCacheLocality | 
-        //    PostProcessSteps.FindDegenerates | PostProcessSteps.FindInvalidData | 
-        //    PostProcessSteps.OptimizeMeshes | PostProcessSteps.FlipUVs);
 
-        int flags = (int)
-            (PostProcessSteps.FindDegenerates |
-            PostProcessSteps.FindInvalidData |
-            PostProcessSteps.FlipUVs |              
-            PostProcessSteps.FlipWindingOrder |     
-            PostProcessSteps.JoinIdenticalVertices |
-            PostProcessSteps.ImproveCacheLocality |
-            PostProcessSteps.OptimizeMeshes |
-            PostProcessSteps.Triangulate);
-
+       
         void DrawEditor()
         {
             if (!_showEditor)
@@ -195,27 +201,62 @@ namespace ModelViewer.src
                 ImGui.EndMenuBar();
 
             }
-            
+            if (ImGui.Button("Reset Camera") || InputManager.KeyDownOnce(Key.R))
+            {
+                _freeCamera.Position = new Vector3(5, 5, 5);
+                _freeCamera.Yaw = 4;
+                _freeCamera.Pitch = -0.5f;
+                
+            }
             if (ImGui.CollapsingHeader("Assimp flags"))
             {
-                ImGui.CheckboxFlags("Join Vertices", ref flags, (int)PostProcessSteps.JoinIdenticalVertices);
-                ImGui.CheckboxFlags("Generate Normals", ref flags, (int)PostProcessSteps.GenerateNormals);
-                ImGui.CheckboxFlags("Generate Smooth Normals", ref flags, (int)PostProcessSteps.GenerateSmoothNormals);
-                ImGui.CheckboxFlags("Join Vertices", ref flags, (int)PostProcessSteps.JoinIdenticalVertices);
-                ImGui.CheckboxFlags("Triangulate", ref flags, (int)PostProcessSteps.Triangulate);
-                ImGui.CheckboxFlags("Limit bone weights", ref flags, (int)PostProcessSteps.LimitBoneWeights);
-                ImGui.CheckboxFlags("Improve cache locality", ref flags, (int)PostProcessSteps.ImproveCacheLocality);
-                ImGui.CheckboxFlags("Find degenerates", ref flags, (int)PostProcessSteps.FindInvalidData);
-                ImGui.CheckboxFlags("Optimize Meshes", ref flags, (int)PostProcessSteps.OptimizeMeshes);
-                ImGui.CheckboxFlags("Flip UV", ref flags, (int)PostProcessSteps.FlipUVs);
-                ImGui.CheckboxFlags("Fix In Facing normals", ref flags, (int)PostProcessSteps.FixInFacingNormals);
-                ImGui.CheckboxFlags("Flip winding", ref flags, (int)PostProcessSteps.FlipWindingOrder);
+                ImGui.CheckboxFlags("Triangulate", ref _assimpFlags, (int)PostProcessSteps.Triangulate);
+                
+                if (ImGui.CheckboxFlags("Generate Smooth Normals", ref _assimpFlags, (int)PostProcessSteps.GenerateSmoothNormals))
+                {
+                    var en = (PostProcessSteps)_assimpFlags;
+                    if(en.HasFlag(PostProcessSteps.GenerateNormals))
+                    {
+                        en &= ~PostProcessSteps.GenerateNormals;
+                        _assimpFlags = (int)en;
+                    }   
+                }
+                if(ImGui.CheckboxFlags("Generate Normals", ref _assimpFlags, (int)PostProcessSteps.GenerateNormals))
+                {
+                    var en = (PostProcessSteps)_assimpFlags;
+                    if (en.HasFlag(PostProcessSteps.GenerateSmoothNormals))
+                    {
+                        en &= ~PostProcessSteps.GenerateSmoothNormals;
+                        _assimpFlags = (int)en;
+                    }
+                }
+                ImGui.CheckboxFlags("Generate UV", ref _assimpFlags, (int)PostProcessSteps.GenerateUVCoords);
+                ImGui.CheckboxFlags("Join Vertices", ref _assimpFlags, (int)PostProcessSteps.JoinIdenticalVertices);
+                ImGui.CheckboxFlags("Sort by Type", ref _assimpFlags, (int)PostProcessSteps.SortByPrimitiveType);
+                ImGui.CheckboxFlags("Flip UV", ref _assimpFlags, (int)PostProcessSteps.FlipUVs);
+                ImGui.CheckboxFlags("Improve cache locality", ref _assimpFlags, (int)PostProcessSteps.ImproveCacheLocality);
+                ImGui.CheckboxFlags("Optimize Graph", ref _assimpFlags, (int)PostProcessSteps.OptimizeGraph);
+                ImGui.CheckboxFlags("Optimize Meshes", ref _assimpFlags, (int)PostProcessSteps.OptimizeMeshes);
+                ImGui.CheckboxFlags("Limit bone weights", ref _assimpFlags, (int)PostProcessSteps.LimitBoneWeights);
+                ImGui.CheckboxFlags("Find Degenerates", ref _assimpFlags, (int)PostProcessSteps.FindDegenerates);
+                ImGui.CheckboxFlags("Fix In Facing normals", ref _assimpFlags, (int)PostProcessSteps.FixInFacingNormals);
+                ImGui.CheckboxFlags("PreTransform Vertices", ref _assimpFlags, (int)PostProcessSteps.PreTransformVertices);
+                ImGui.CheckboxFlags("Flip winding", ref _assimpFlags, (int)PostProcessSteps.FlipWindingOrder);
+                ImGui.CheckboxFlags("Split Large Meshes", ref _assimpFlags, (int)PostProcessSteps.SplitLargeMeshes);
 
+                if (ImGui.Button("Reload Model"))
+                {
+                    if (_loadedModels.Count > 0)
+                    {
+                        LoadModel(_modelPath);
+                    }
+                    else
+                    {
+                        Status = "No model to reload";
+                    }
+                }
             }
-            if (ImGui.Button("Reload Model"))
-            {
-                LoadModel(_modelPath);
-            }
+            
 
 
             foreach (var md in _loadedModels)
@@ -239,11 +280,14 @@ namespace ModelViewer.src
                 _showStatus = false;
                 _statusTime = 0;
             }
-            var width = 300;
-            ImGui.SetNextWindowPos(new Vector2(WindowWidth - width, 0));
+            //var width = 300;
+            ImGui.SetNextWindowPos(new Vector2(WindowWidth/2, 0));
             ImGui.Begin("status", ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove);
+            GUIManager.SetFontSize(30);
             ImGui.Text($"{_status}");
             ImGui.End();
+
+            //GUIManager.DrawCenteredText($"{_status}", new Vector2(WindowWidth / 2, WindowHeight / 2), new Vector4(0, .6f, 1, 1), 40);
         }
         void OpenModelFilePicker()
         {
@@ -271,11 +315,13 @@ namespace ModelViewer.src
             {
                 _loadedModels.ForEach(l => l.Dispose());
                 _loadedModels.Clear();
+                Textures.Clear();
             }
             _modelPath = path;
-            var md = new ModelData(this, path, flags);
+            var md = new ModelData(this, path, _assimpFlags);
             _loadedModels.Add(md);
             Status = $"Loaded model {md.Name}";
+            Textures.AddRange(md.Model.Textures.Values);
         }
         void OpenTextureFilePicker()
         {
